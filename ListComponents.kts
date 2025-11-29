@@ -2,14 +2,25 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 
-fun main() {
+data class KanjiInfo(
+    val kanji: String,
+    val keyword: String,
+    val jlpt: String,
+    val components: List<String>
+)
+
+fun main(args: Array<String>) {
+    val newComponent = args.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+        ?: error("Usage: kotlinc -script ListComponents.kts <new-component>")
+
     val inputPath = Path.of("kanji-selection.csv")
     val targets = readTargetList(inputPath)
     if (targets.isEmpty()) {
         error("Input CSV $inputPath did not contain any kanji entries")
     }
 
-    val data = readKanjiData(Path.of("heisig-kanjis-cleaned.csv"))
+    val entries = readKanjiData(Path.of("heisig-kanjis-cleaned.csv"))
+    val data = entries.associateBy { it.kanji }
     val missing = targets.filterNot { data.containsKey(it) }
     if (missing.isNotEmpty()) {
         error("Kanji not found in cleaned CSV: ${missing.joinToString(", ")}")
@@ -36,16 +47,32 @@ fun main() {
     println()
     println("All components (${allComponents.size} unique):")
     allComponents.forEach { println(it) }
+    println()
+
+    val allowedComponents = linkedSetOf<String>().apply {
+        addAll(allComponents)
+        add(newComponent)
+        collectComponents(newComponent, data, this)
+    }
+
+    val buildable = findBuildableKanji(entries, allowedComponents)
+
+    println("New component introduced: $newComponent")
+    println("Allowed components now (${allowedComponents.size}): ${allowedComponents.joinToString(", ")}")
+    println()
+    println("Kanji buildable with current components (${buildable.size}):")
+    buildable.forEach { println("${it.kanji} (${it.keyword}) [${it.jlpt.ifEmpty { "None" }}]") }
 }
 
-main()
+main(args)
 
 private fun collectComponents(
     kanji: String,
-    data: Map<String, List<String>>,
+    data: Map<String, KanjiInfo>,
     accumulator: MutableSet<String>
 ) {
-    val components = data[kanji]
+    val info = data[kanji]
+    val components = info?.components
     if (components == null || components.isEmpty()) {
         accumulator += kanji
         return
@@ -58,24 +85,38 @@ private fun collectComponents(
     }
 }
 
-private fun readKanjiData(path: Path): Map<String, List<String>> {
+private fun readKanjiData(path: Path): List<KanjiInfo> {
     Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
         val header = reader.readLine() ?: error("Empty CSV: $path")
         val columns = parseCsvLine(header)
         val columnIndex = columns.withIndex().associate { it.value to it.index }
         val kanjiIdx = columnIndex["kanji"] ?: error("Missing kanji column")
+        val keywordIdx = columnIndex["keyword_6th_ed"] ?: error("Missing keyword column")
+        val jlptIdx = columnIndex["jlpt"] ?: error("Missing jlpt column")
         val componentsIdx = columnIndex["components"] ?: error("Missing components column")
 
-        val map = mutableMapOf<String, List<String>>()
+        val list = mutableListOf<KanjiInfo>()
         reader.lineSequence().filter { it.isNotBlank() }.forEach { line ->
             val cells = parseCsvLine(line)
             val kanji = cells.getOrNull(kanjiIdx)?.trim().orEmpty()
             if (kanji.isEmpty()) return@forEach
+            val keyword = cells.getOrNull(keywordIdx)?.trim().orEmpty()
+            val jlpt = cells.getOrNull(jlptIdx)?.trim().orEmpty()
             val rawComponents = cells.getOrNull(componentsIdx)?.trim().orEmpty()
             val components = if (rawComponents.isEmpty()) emptyList() else rawComponents.split(';').map { it.trim() }.filter { it.isNotEmpty() }
-            map[kanji] = components
+            list += KanjiInfo(kanji, keyword, jlpt, components)
         }
-        return map
+        return list
+    }
+}
+
+private fun findBuildableKanji(entries: List<KanjiInfo>, allowed: Set<String>): List<KanjiInfo> {
+    return entries.filter { entry ->
+        if (entry.components.isEmpty()) {
+            entry.kanji in allowed
+        } else {
+            entry.components.all { it.isNotBlank() && it in allowed }
+        }
     }
 }
 
