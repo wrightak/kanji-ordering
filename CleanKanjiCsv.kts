@@ -68,7 +68,7 @@ private fun parseKanjiVgComponents(path: Path): Map<String, List<String>> {
             val kanjiElement = nodes.item(i) as? Element ?: continue
             val rootGroup = firstChildGroup(kanjiElement) ?: continue
             val kanjiChar = getElementName(rootGroup) ?: continue
-            val components = extractDirectComponents(rootGroup)
+            val components = extractLeafComponents(rootGroup)
             result[kanjiChar] = components
         }
         return result
@@ -117,39 +117,24 @@ private fun firstChildGroup(element: Element): Element? {
     return null
 }
 
-private fun extractDirectComponents(group: Element): List<String> {
-    val seen = LinkedHashSet<String>()
-    val children = group.childNodes
+private fun extractLeafComponents(node: Element): List<String> {
+    val children = node.childNodes
+    val leafNames = LinkedHashSet<String>()
+    var hasChildGroup = false
     for (i in 0 until children.length) {
-        val node = children.item(i)
-        if (node.nodeType == Node.ELEMENT_NODE && node.nodeName == "g") {
-            val child = node as Element
-            val name = getElementName(child) ?: findFirstElementName(child)
-            if (!name.isNullOrBlank()) {
-                seen += name
-            }
+        val child = children.item(i)
+        if (child.nodeType == Node.ELEMENT_NODE && child.nodeName == "g") {
+            hasChildGroup = true
+            leafNames += extractLeafComponents(child as Element)
         }
     }
-    return seen.toList()
-}
-
-private fun findFirstElementName(element: Element): String? {
-    val children = element.childNodes
-    for (i in 0 until children.length) {
-        val node = children.item(i)
-        if (node.nodeType == Node.ELEMENT_NODE && node.nodeName == "g") {
-            val child = node as Element
-            val name = getElementName(child)
-            if (!name.isNullOrBlank()) {
-                return name
-            }
-            val nested = findFirstElementName(child)
-            if (!nested.isNullOrBlank()) {
-                return nested
-            }
+    if (!hasChildGroup) {
+        val name = getElementName(node)
+        if (!name.isNullOrBlank()) {
+            leafNames += name
         }
     }
-    return null
+    return leafNames.toList()
 }
 
 private fun getElementName(element: Element): String? {

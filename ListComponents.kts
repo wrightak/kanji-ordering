@@ -60,8 +60,10 @@ fun main(args: Array<String>) {
     println("New component introduced: $newComponent")
     println("Allowed components now (${allowedComponents.size}): ${allowedComponents.joinToString(", ")}")
     println()
-    println("Kanji buildable with current components (${buildable.size}):")
-    buildable.forEach { println("${it.kanji} (${it.keyword}) [${it.jlpt.ifEmpty { "None" }}]") }
+    val targetSet = targets.toSet()
+    val novelBuildable = buildable.filterNot { it.kanji in targetSet }
+    println("Kanji buildable with current components (${novelBuildable.size} new):")
+    novelBuildable.forEach { println("${it.kanji} (${it.keyword}) [${it.jlpt.ifEmpty { "None" }}]") }
 }
 
 main(args)
