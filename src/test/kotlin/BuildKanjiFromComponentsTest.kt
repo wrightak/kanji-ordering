@@ -1,6 +1,6 @@
+import org.junit.jupiter.api.Assertions.assertTrue
 import java.nio.file.Path
 import kotlin.test.Test
-import kotlin.test.assertTrue
 
 class BuildKanjiFromComponentsTest {
     @Test
