@@ -1,5 +1,7 @@
 .idea/
 .gradle/
 build/
-.idea/
+
 .DS_Store
+kanji-selection.csv
+exclusion-list.csv

@@ -17,10 +17,12 @@ fun main() {
     val heisigPath = Path.of("heisig-kanjis.csv")
     val selectionPath = Path.of("kanji-selection.csv")
     val exclusionPath = Path.of("exclusion-list.csv")
+    val selectionSamplePath = Path.of("kanji-selection.sample.csv")
+    val exclusionSamplePath = Path.of("exclusion-list.sample.csv")
 
     val heisigRows = readHeisig(heisigPath)
-    val selection = readSelection(selectionPath)
-    val exclusions = readExclusionList(exclusionPath)
+    val selection = readSelection(selectionPath, selectionSamplePath)
+    val exclusions = readExclusionList(exclusionPath, exclusionSamplePath)
 
     if (selection.isEmpty()) {
         error("No kanji found in $selectionPath")
@@ -114,9 +116,13 @@ fun readHeisig(path: Path): List<KanjiEntry> {
     }
 }
 
-fun readSelection(path: Path): List<String> {
-    if (!Files.exists(path)) return emptyList()
-    Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
+fun readSelection(path: Path, samplePath: Path = Path.of("kanji-selection.sample.csv")): List<String> {
+    val resolved = when {
+        Files.exists(path) -> path
+        Files.exists(samplePath) -> samplePath
+        else -> return emptyList()
+    }
+    Files.newBufferedReader(resolved, StandardCharsets.UTF_8).use { reader ->
         val header = reader.readLine() ?: return emptyList()
         val columns = parseCsvLine(header)
         val kanjiIdx = columns.withIndex().firstOrNull { it.value == "kanji" }?.index
@@ -131,9 +137,13 @@ fun readSelection(path: Path): List<String> {
     }
 }
 
-fun readExclusionList(path: Path): List<String> {
-    if (!Files.exists(path)) return emptyList()
-    Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
+fun readExclusionList(path: Path, samplePath: Path = Path.of("exclusion-list.sample.csv")): List<String> {
+    val resolved = when {
+        Files.exists(path) -> path
+        Files.exists(samplePath) -> samplePath
+        else -> return emptyList()
+    }
+    Files.newBufferedReader(resolved, StandardCharsets.UTF_8).use { reader ->
         val lines = reader.lineSequence()
             .filter { it.isNotBlank() }
             .map { parseCsvLine(it).firstOrNull()?.trim().orEmpty() }
