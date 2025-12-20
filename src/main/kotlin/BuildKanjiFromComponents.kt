@@ -16,9 +16,12 @@ data class BuildResult(
 fun main() {
     val heisigPath = Path.of("heisig-kanjis.csv")
     val selectionPath = Path.of("kanji-selection.csv")
+    val exclusionPath = Path.of("exclusion-list.csv")
 
     val heisigRows = readHeisig(heisigPath)
     val selection = readSelection(selectionPath)
+    val exclusions = readExclusionList(exclusionPath)
+
     if (selection.isEmpty()) {
         error("No kanji found in $selectionPath")
     }
@@ -26,14 +29,20 @@ fun main() {
     val missing = selection.filterNot { kanji -> heisigRows.any { it.kanji == kanji } }
     missing.forEach { System.err.println("Warning: kanji '$it' not found in $heisigPath") }
 
-    val result = computeBuildable(heisigRows, selection)
+    val result = computeBuildable(heisigRows, selection, exclusions)
 
+    val excludedSet = exclusions.toSet()
+    println("Excluded kanji (${excludedSet.size}): ${excludedSet.joinToString(", ")}")
     println("Components collected (${result.components.size}): ${result.components.joinToString(", ")}")
     println("Buildable kanji not already selected (${result.buildable.size}):")
     result.buildable.forEach { println(it.kanji) }
 }
 
-fun computeBuildable(heisigRows: List<KanjiEntry>, selection: List<String>): BuildResult {
+fun computeBuildable(
+    heisigRows: List<KanjiEntry>,
+    selection: List<String>,
+    excluded: List<String> = emptyList()
+): BuildResult {
     val byKanji = heisigRows.associateBy { it.kanji }
 
     val components = linkedSetOf<String>()
@@ -64,9 +73,11 @@ fun computeBuildable(heisigRows: List<KanjiEntry>, selection: List<String>): Bui
     selection.forEach { expand(it) }
 
     val selectionSet = selection.toSet()
+    val excludedSet = excluded.toSet()
     val buildable = heisigRows.filter { entry ->
         entry.components.isNotEmpty() &&
             entry.kanji !in selectionSet &&
+            entry.kanji !in excludedSet &&
             entry.components.all { it in components }
     }
 
@@ -117,6 +128,18 @@ fun readSelection(path: Path): List<String> {
             .mapNotNull { row -> row.getOrNull(kanjiIdx)?.trim() }
             .filter { it.isNotEmpty() }
             .toList()
+    }
+}
+
+fun readExclusionList(path: Path): List<String> {
+    if (!Files.exists(path)) return emptyList()
+    Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
+        val lines = reader.lineSequence()
+            .filter { it.isNotBlank() }
+            .map { parseCsvLine(it).firstOrNull()?.trim().orEmpty() }
+            .filter { it.isNotEmpty() }
+            .toList()
+        return if (lines.firstOrNull()?.equals("kanji", ignoreCase = true) == true) lines.drop(1) else lines
     }
 }
 
