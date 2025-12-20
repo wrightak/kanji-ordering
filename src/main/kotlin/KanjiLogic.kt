@@ -13,31 +13,11 @@ data class BuildResult(
     val buildable: List<KanjiEntry>
 )
 
-fun main() {
-    val heisigPath = Path.of("heisig-kanjis.csv")
-    val selectionPath = Path.of("kanji-selection.csv")
-    val exclusionPath = Path.of("exclusion-list.csv")
-    val selectionSamplePath = Path.of("kanji-selection.sample.csv")
-    val exclusionSamplePath = Path.of("exclusion-list.sample.csv")
-
-    val heisigRows = readHeisig(heisigPath)
-    val selection = readSelection(selectionPath, selectionSamplePath)
-    val exclusions = readExclusionList(exclusionPath, exclusionSamplePath)
-
-    if (selection.isEmpty()) {
-        error("No kanji found in $selectionPath")
-    }
-
-    val missing = selection.filterNot { kanji -> heisigRows.any { it.kanji == kanji } }
-    missing.forEach { System.err.println("Warning: kanji '$it' not found in $heisigPath") }
-
-    val result = computeBuildable(heisigRows, selection, exclusions)
-
-    val excludedSet = exclusions.toSet()
-    println("Excluded kanji (${excludedSet.size}): ${excludedSet.joinToString(", ")}")
-    println("Components collected (${result.components.size}): ${result.components.joinToString(", ")}")
-    println("Buildable kanji not already selected (${result.buildable.size}):")
-    result.buildable.forEach { println(it.kanji) }
+data class NextKanjiSuggestion(
+    val kanji: String,
+    val gained: List<KanjiEntry>
+) {
+    val gain: Int get() = gained.size
 }
 
 fun computeBuildable(
@@ -84,6 +64,35 @@ fun computeBuildable(
     }
 
     return BuildResult(components, buildable)
+}
+
+fun rankNextKanji(
+    heisigRows: List<KanjiEntry>,
+    selection: List<String>,
+    excluded: List<String> = emptyList(),
+    baseline: BuildResult? = null
+): List<NextKanjiSuggestion> {
+    val selectionSet = selection.toSet()
+    val excludedSet = excluded.toSet()
+    val baseResult = baseline ?: computeBuildable(heisigRows, selection, excluded)
+    val baseBuildable = baseResult.buildable.map { it.kanji }.toSet()
+
+    val suggestions = mutableListOf<NextKanjiSuggestion>()
+
+    for (entry in heisigRows) {
+        val candidate = entry.kanji
+        if (candidate in selectionSet || candidate in excludedSet) continue
+
+        val candidateResult = computeBuildable(heisigRows, selection + candidate, excluded)
+        val candidateBuildable = candidateResult.buildable.map { it.kanji }.toSet()
+        val gainedKanji = candidateBuildable - baseBuildable
+        if (gainedKanji.isEmpty()) continue
+
+        val gainedEntries = candidateResult.buildable.filter { it.kanji in gainedKanji }
+        suggestions += NextKanjiSuggestion(candidate, gainedEntries)
+    }
+
+    return suggestions.sortedByDescending { it.gain }
 }
 
 fun readHeisig(path: Path): List<KanjiEntry> {

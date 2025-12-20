@@ -22,4 +22,22 @@ class BuildKanjiFromComponentsTest {
             "Excluded kanji should not appear in buildable list"
         }
     }
+
+    @Test
+    fun `ranking orders by gain`() {
+        val rows = listOf(
+            KanjiEntry("A", emptyList(), emptyList()), // primitive
+            KanjiEntry("B", emptyList(), emptyList()), // primitive
+            KanjiEntry("C", emptyList(), listOf("A", "B")), // requires A and B
+            KanjiEntry("D", emptyList(), listOf("A")), // requires A
+        )
+
+        val selection = listOf("A")
+        val baseline = computeBuildable(rows, selection, emptyList())
+        val ranked = rankNextKanji(rows, selection, emptyList(), baseline)
+
+        assertTrue(ranked.firstOrNull()?.kanji == "B") {
+            "Expected B to be the top-ranked suggestion"
+        }
+    }
 }
