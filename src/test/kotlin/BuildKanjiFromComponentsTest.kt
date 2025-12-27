@@ -40,4 +40,21 @@ class BuildKanjiFromComponentsTest {
             "Expected B to be the top-ranked suggestion"
         }
     }
+
+    @Test
+    fun `component ranking finds best unlock`() {
+        val rows = listOf(
+            KanjiEntry("A", emptyList(), emptyList()),
+            KanjiEntry("B", emptyList(), emptyList()),
+            KanjiEntry("C", emptyList(), listOf("A", "B")),
+        )
+        val selection = listOf("A")
+        val baseline = computeBuildable(rows, selection, emptyList())
+
+        val ranked = rankNextComponent(rows, selection, emptyList(), baseline)
+
+        assertTrue(ranked.firstOrNull()?.component == "B") {
+            "Expected component B to unlock the most kanji"
+        }
+    }
 }

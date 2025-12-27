@@ -20,6 +20,13 @@ data class NextKanjiSuggestion(
     val gain: Int get() = gained.size
 }
 
+data class ComponentSuggestion(
+    val component: String,
+    val gained: List<KanjiEntry>
+) {
+    val gain: Int get() = gained.size
+}
+
 fun computeBuildable(
     heisigRows: List<KanjiEntry>,
     selection: List<String>,
@@ -70,7 +77,8 @@ fun rankNextKanji(
     heisigRows: List<KanjiEntry>,
     selection: List<String>,
     excluded: List<String> = emptyList(),
-    baseline: BuildResult? = null
+    baseline: BuildResult? = null,
+    gradeLookup: Map<String, Int?> = emptyMap()
 ): List<NextKanjiSuggestion> {
     val selectionSet = selection.toSet()
     val excludedSet = excluded.toSet()
@@ -90,6 +98,38 @@ fun rankNextKanji(
 
         val gainedEntries = candidateResult.buildable.filter { it.kanji in gainedKanji }
         suggestions += NextKanjiSuggestion(candidate, gainedEntries)
+    }
+
+    return suggestions.sortedWith(
+        compareBy<NextKanjiSuggestion> { gradeLookup[it.kanji] ?: Int.MAX_VALUE }
+            .thenByDescending { it.gain }
+            .thenBy { it.kanji }
+    )
+}
+
+fun rankNextComponent(
+    heisigRows: List<KanjiEntry>,
+    selection: List<String>,
+    excluded: List<String> = emptyList(),
+    baseline: BuildResult? = null
+): List<ComponentSuggestion> {
+    val baseResult = baseline ?: computeBuildable(heisigRows, selection, excluded)
+    val baseBuildable = baseResult.buildable.map { it.kanji }.toSet()
+    val existingComponents = baseResult.components
+
+    val allComponents = heisigRows.flatMap { it.components }.toSet()
+
+    val suggestions = mutableListOf<ComponentSuggestion>()
+    for (component in allComponents) {
+        if (component in existingComponents) continue
+
+        val candidateResult = computeBuildable(heisigRows, selection + component, excluded)
+        val candidateBuildable = candidateResult.buildable.map { it.kanji }.toSet()
+        val gainedKanji = candidateBuildable - baseBuildable
+        if (gainedKanji.isEmpty()) continue
+
+        val gainedEntries = candidateResult.buildable.filter { it.kanji in gainedKanji }
+        suggestions += ComponentSuggestion(component, gainedEntries)
     }
 
     return suggestions.sortedByDescending { it.gain }
@@ -189,4 +229,25 @@ fun parseCsvLine(line: String): List<String> {
     }
     cells += buffer.toString()
     return cells
+}
+
+fun readGrades(path: Path): Map<String, Int?> {
+    if (!Files.exists(path)) return emptyMap()
+    Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
+        val header = reader.readLine() ?: return emptyMap()
+        val columns = parseCsvLine(header)
+        val kanjiIdx = columns.indexOf("kanji")
+        val gradeIdx = columns.indexOf("grade")
+        if (kanjiIdx == -1 || gradeIdx == -1) return emptyMap()
+
+        return reader.lineSequence()
+            .filter { it.isNotBlank() }
+            .map { parseCsvLine(it) }
+            .mapNotNull { row ->
+                val kanji = row.getOrNull(kanjiIdx)?.trim().orEmpty()
+                val grade = row.getOrNull(gradeIdx)?.trim()
+                if (kanji.isEmpty()) null else kanji to grade?.toIntOrNull()
+            }
+            .toMap()
+    }
 }

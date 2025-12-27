@@ -6,7 +6,6 @@ fun main() {
     val exclusionPath = Path.of("exclusion-list.csv")
     val selectionSamplePath = Path.of("kanji-selection.sample.csv")
     val exclusionSamplePath = Path.of("exclusion-list.sample.csv")
-    val gradesPath = Path.of("kanji-grades.csv")
 
     val heisigRows = readHeisig(heisigPath)
     val selection = readSelection(selectionPath, selectionSamplePath)
@@ -19,19 +18,16 @@ fun main() {
     val missing = selection.filterNot { kanji -> heisigRows.any { it.kanji == kanji } }
     missing.forEach { System.err.println("Warning: kanji '$it' not found in $heisigPath") }
 
-    val grades = readGrades(gradesPath)
-
     val baseline = computeBuildable(heisigRows, selection, exclusions)
-    val suggestions = rankNextKanji(heisigRows, selection, exclusions, baseline, grades)
+    val suggestions = rankNextComponent(heisigRows, selection, exclusions, baseline)
 
     if (suggestions.isEmpty()) {
-        println("No candidate kanji would unlock additional buildable entries.")
+        println("No component would unlock additional buildable kanji.")
     } else {
-        println("Next kanji ranked by grade (lowest first), then unlocked count:")
+        println("Components ranked by unlocked kanji count:")
         suggestions.forEach { suggestion ->
             val gainedList = suggestion.gained.joinToString(", ") { it.kanji }
-            val gradeText = grades[suggestion.kanji]?.toString() ?: "-"
-            println(" - ${suggestion.kanji} (grade $gradeText, +${suggestion.gain}): [$gainedList]")
+            println(" - ${suggestion.component} (+${suggestion.gain}): [$gainedList]")
         }
     }
 }
