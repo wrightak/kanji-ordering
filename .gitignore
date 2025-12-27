@@ -5,3 +5,4 @@ build/
 .DS_Store
 kanji-selection.csv
 exclusion-list.csv
+jmdict.sqlite
