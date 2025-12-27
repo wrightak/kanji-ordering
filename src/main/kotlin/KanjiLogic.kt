@@ -111,7 +111,8 @@ fun rankNextComponent(
     heisigRows: List<KanjiEntry>,
     selection: List<String>,
     excluded: List<String> = emptyList(),
-    baseline: BuildResult? = null
+    baseline: BuildResult? = null,
+    gradeLookup: Map<String, Int?> = emptyMap()
 ): List<ComponentSuggestion> {
     val baseResult = baseline ?: computeBuildable(heisigRows, selection, excluded)
     val baseBuildable = baseResult.buildable.map { it.kanji }.toSet()
@@ -132,7 +133,21 @@ fun rankNextComponent(
         suggestions += ComponentSuggestion(component, gainedEntries)
     }
 
-    return suggestions.sortedByDescending { it.gain }
+    return suggestions.sortedByDescending { scoreComponentSuggestion(it, gradeLookup) }
+}
+
+fun scoreComponentSuggestion(
+    suggestion: ComponentSuggestion,
+    gradeLookup: Map<String, Int?>
+): Int {
+    // Reverse scale: grade 1 -> 10, 2 -> 9, ..., 8 -> 3, 9 -> 2, 10+ -> 1 (non-graded -> 0)
+    fun gradePoints(grade: Int?): Int = when (grade) {
+        null -> 0
+        in 1..10 -> 11 - grade
+        else -> 1
+    }
+
+    return suggestion.gained.sumOf { gradePoints(gradeLookup[it.kanji]) }
 }
 
 fun readHeisig(path: Path): List<KanjiEntry> {

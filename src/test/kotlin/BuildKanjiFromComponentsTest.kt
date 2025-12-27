@@ -57,4 +57,26 @@ class BuildKanjiFromComponentsTest {
             "Expected component B to unlock the most kanji"
         }
     }
+
+    @Test
+    fun `grade weighted component scoring prefers lower grades`() {
+        val rows = listOf(
+            KanjiEntry("A", emptyList(), emptyList()),
+            KanjiEntry("B", emptyList(), emptyList()),
+            KanjiEntry("C", emptyList(), listOf("A", "B")), // graded 1
+            KanjiEntry("D", emptyList(), listOf("A", "B")), // graded 5
+        )
+        val selection = listOf("A")
+        val baseline = computeBuildable(rows, selection, emptyList())
+        val grades = mapOf("C" to 1, "D" to 5)
+
+        val ranked = rankNextComponent(rows, selection, emptyList(), baseline, grades)
+
+        assertTrue(ranked.firstOrNull()?.component == "B") {
+            "Expected component B to be chosen"
+        }
+        val score = scoreComponentSuggestion(ranked.first(), grades)
+        // grade 1 => 10 points, grade 5 => 6 points, total 16
+        assertTrue(score == 16) { "Expected score 16, got $score" }
+    }
 }
